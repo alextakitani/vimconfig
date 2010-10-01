@@ -85,7 +85,8 @@ end
 " Calling pathogen that manages bundle plugins folder
 " obs: pathogen needs to reload filetype settings in order
 "      to load ftplugins correctly
-filetype off
+filetype off 
+call pathogen#helptags()
 call pathogen#runtime_append_all_bundles() 
 filetype plugin indent on
 
