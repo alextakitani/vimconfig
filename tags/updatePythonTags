@@ -1,0 +1,1 @@
+ctags -R -f ~/l30-emacs/vim/tags/python.ctags /usr/lib/python2.5
