@@ -194,7 +194,7 @@ nnoremap j gj
 nnoremap k gk
 nnoremap <space> za
 map <leader>a <ESC>ggvG$
-nnoremap <silent><leader>f :CommandT<CR>
+"nnoremap <silent><leader>f :CommandT<CR>
 
 " Maps for tab specific funcionalities
 nnoremap L :tabnext<CR>

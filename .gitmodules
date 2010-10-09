@@ -37,3 +37,6 @@
 [submodule "bundle/ruby"]
 	path = bundle/ruby
 	url = git://github.com/vim-ruby/vim-ruby.git
+[submodule "bundle/snipmate-snipets"]
+	path = bundle/snipmate-snipets
+	url = http://github.com/scrooloose/snipmate-snippets.git
