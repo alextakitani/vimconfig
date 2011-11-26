@@ -1,53 +1,112 @@
-" *****************************************
-" LeoLuz vimrc configs                    *
-" Feel free to use this file as you wish  *
-"                                         *
-" email: leonardo dot la at gmail dot com *
-" twitter: @leo_luz                       *
-"                                         *
-" *****************************************
+"avoiding annoying CSApprox warning message
+let g:CSApprox_verbose_level = 0
 
+"necessary on some Linux distros for pathogen to properly load bundles
+filetype on
+filetype off
+
+"load pathogen managed plugins
+call pathogen#runtime_append_all_bundles()
+
+"Use Vim settings, rather then Vi settings (much better!).
+"This must be first, because it changes other options as a side effect.
 set nocompatible
 
-" ****************
-" Script section *
-" ****************
+"allow backspacing over everything in insert mode
+set backspace=indent,eol,start
 
-" Add source navigation on python core livraries 
-if has("python")
-python << EOF
-import os
-import sys
-import vim
-for p in sys.path:
-    if os.path.isdir(p):
-        vim.command(r"set path+=%s" % (p.replace(" ", r"\ ")))
-EOF
-endif
+"store lots of :cmdline history
+set history=1000
 
-" *********************
-" Status line section *
-" *********************
+set showcmd     "show incomplete cmds down the bottom
+set showmode    "show current mode down the bottom
 
-set statusline=%t\              "tail of the filename
-set statusline+=%y              "filetype
+set incsearch   "find the next match as we type the search
+set hlsearch    "hilight searches by default
 
-"display a warning if file encoding isn't utf-8
-set statusline+=%{(&fenc!='utf-8'&&&fenc!='')?'['.&fenc.']':''}
-set statusline+=%*
+set number      "add line numbers
+set showbreak=...
+set wrap linebreak nolist
 
-"display a warning if &et is wrong, or we have mixed-indenting
-set statusline+=%{StatuslineTabWarning()}
-set statusline+=%*
+set directory=~/tmp
+set backupdir=~/tmp
 
-set statusline+=%r              "read only flag
-set statusline+=%m              "modified flag
+"mapping for command key to map navigation thru display lines instead
+"of just numbered lines
+vmap <D-j> gj
+vmap <D-k> gk
+vmap <D-4> g$
+vmap <D-6> g^
+vmap <D-0> g^
+nmap <D-j> gj
+nmap <D-k> gk
+nmap <D-4> g$
+nmap <D-6> g^
+nmap <D-0> g^
 
-set statusline+=%=              "left/right separator
-set statusline+=col:%c\         "cursor column
-set statusline+=line:%l/%L\     "cursor line
-set statusline+=%P              "percent through file
+"add some line space for easy reading
+set linespace=4
+
+"disable visual bell
+set visualbell t_vb=
+
+"try to make possible to navigate within lines of wrapped lines
+nmap <Down> gj
+nmap <Up> gk
+set fo=l
+
+"statusline setup
+set statusline=%f       "tail of the filename
+
+"Git
+set statusline+=%{fugitive#statusline()}
+
+"RVM
+set statusline+=%{exists('g:loaded_rvm')?rvm#statusline():''}
+
+set statusline+=%=      "left/right separator
+set statusline+=%c,     "cursor column
+set statusline+=%l/%L   "cursor line/total lines
+set statusline+=\ %P    "percent through file
 set laststatus=2
+
+" Saving and exit
+nmap <leader>q :wqa!<CR>
+nmap <leader>w :w!<CR>
+nmap <leader><Esc> :q!<CR>
+
+"turn off needless toolbar on gvim/mvim
+set guioptions-=T
+
+"recalculate the trailing whitespace warning when idle, and after saving
+autocmd cursorhold,bufwritepost * unlet! b:statusline_trailing_space_warning
+
+"return '[\s]' if trailing white space is detected
+"return '' otherwise
+function! StatuslineTrailingSpaceWarning()
+    if !exists("b:statusline_trailing_space_warning")
+        if search('\s\+$', 'nw') != 0
+            let b:statusline_trailing_space_warning = '[\s]'
+        else
+            let b:statusline_trailing_space_warning = ''
+        endif
+    endif
+    return b:statusline_trailing_space_warning
+endfunction
+
+
+"return the syntax highlight group under the cursor ''
+function! StatuslineCurrentHighlight()
+    let name = synIDattr(synID(line('.'),col('.'),1),'name')
+    if name == ''
+        return ''
+    else
+        return '[' . name . ']'
+    endif
+endfunction
+
+"recalculate the tab warning flag when idle and after writing
+autocmd cursorhold,bufwritepost * unlet! b:statusline_tab_warning
 
 "return '[&et]' if &et is set wrong
 "return '[mixed-indenting]' if spaces and tabs are used to indent
@@ -58,7 +117,7 @@ function! StatuslineTabWarning()
         let spaces = search('^ ', 'nw') != 0
 
         if tabs && spaces
-            let b:statusline_tab_warning = '[mixed-indenting]'
+            let b:statusline_tab_warning =  '[mixed-indenting]'
         elseif (spaces && !&et) || (tabs && &et)
             let b:statusline_tab_warning = '[&et]'
         else
@@ -68,159 +127,359 @@ function! StatuslineTabWarning()
     return b:statusline_tab_warning
 endfunction
 
+"recalculate the long line warning when idle and after saving
+autocmd cursorhold,bufwritepost * unlet! b:statusline_long_line_warning
 
-" *********************
-" OS specific section *
-" *********************
+"return a warning for "long lines" where "long" is either &textwidth or 80 (if
+"no &textwidth is set)
+"
+"return '' if no long lines
+"return '[#x,my,$z] if long lines are found, were x is the number of long
+"lines, y is the median length of the long lines and z is the length of the
+"longest line
+function! StatuslineLongLineWarning()
+    if !exists("b:statusline_long_line_warning")
+        let long_line_lens = s:LongLines()
 
-if has("gui_running")
-    colorscheme candycode       " other nice colorschemes to try: molokai, fruity
-    set cursorline              " Highlight current line
-else
-    syntax off
-end
+        if len(long_line_lens) > 0
+            let b:statusline_long_line_warning = "[" .
+                        \ '#' . len(long_line_lens) . "," .
+                        \ 'm' . s:Median(long_line_lens) . "," .
+                        \ '$' . max(long_line_lens) . "]"
+        else
+            let b:statusline_long_line_warning = ""
+        endif
+    endif
+    return b:statusline_long_line_warning
+endfunction
 
-if has("gui_gtk2")
-    set guifont=Monospace\ 11
-    let cfgfile = ".vimrc"
-    let mapleader = ";"
-elseif has("gui_win32")
-    set guifont=Dejavu\ Sans\ Mono:h13,Consolas:h12
-    let cfgfile = "_vimrc"
-    let mapleader = "ç"
-elseif has("mac")
-    set macmeta
-    set guifont=Menlo:h16
-    let cfgfile = ".vimrc"
-    let mapleader = ";"
-else
-    let cfgfile = ".vimrc"
-    let mapleader = ";"
-end
+"return a list containing the lengths of the long lines in this buffer
+function! s:LongLines()
+    let threshold = (&tw ? &tw : 80)
+    let spaces = repeat(" ", &ts)
 
-" ****************
-" Config section *
-" ****************
+    let long_line_lens = []
 
-" Calling pathogen that manages bundle plugins folder
-" obs: pathogen needs to reload filetype settings in order
-"      to load ftplugins correctly
-filetype off
-call pathogen#runtime_append_all_bundles() 
-filetype plugin indent on
+    let i = 1
+    while i <= line("$")
+        let len = strlen(substitute(getline(i), '\t', spaces, 'g'))
+        if len > threshold
+            call add(long_line_lens, len)
+        endif
+        let i += 1
+    endwhile
 
-if has("autocmd")
-    au BufRead,BufNewFile *.js set ft=javascript.jquery
-    autocmd FileType python set omnifunc=pythoncomplete#Complete
-    autocmd FileType javascript set omnifunc=javascriptcomplete#CompleteJS
-    autocmd FileType java set omnifunc=javacomplete#Complete
-    autocmd FileType ruby set omnifunc=rubycomplete#Complete
-    autocmd FileType html set omnifunc=htmlcomplete#CompleteTags
-    autocmd FileType css set omnifunc=csscomplete#CompleteCSS
-    autocmd FileType xml set omnifunc=xmlcomplete#CompleteTags
-    autocmd FileType php set omnifunc=phpcomplete#CompletePHP
-    autocmd FileType c set omnifunc=ccomplete#Complete
-    autocmd GUIEnter * set lines=40 columns=150
-endif
+    return long_line_lens
+endfunction
 
-" AutoComplPop configuration
-let g:acp_behaviorKeywordLength = 4
-let g:acp_enableAtStartup = 1
-let g:acp_completeoptPreview = 1
+"find the median of the given array of numbers
+function! s:Median(nums)
+    let nums = sort(a:nums)
+    let l = len(nums)
 
-" NERDTree configuration
-let g:NERDTreeShowBookmarks=1
+    if l % 2 == 1
+        let i = (l-1) / 2
+        return nums[i]
+    else
+        return (nums[l/2] + nums[(l/2)-1]) / 2
+    endif
+endfunction
 
-" Command-T configuration
+"indent settings
+set shiftwidth=2
+set softtabstop=2
+set expandtab
+set autoindent
+
+"folding settings
+set foldmethod=indent   "fold based on indent
+set foldnestmax=3       "deepest fold is 3 levels
+set nofoldenable        "dont fold by default
+
+set wildmode=list:longest   "make cmdline tab completion similar to bash
+set wildmenu                "enable ctrl-n and ctrl-p to scroll thru matches
+set wildignore=*.o,*.obj,*~ "stuff to ignore when tab completing
+
+"display tabs and trailing spaces
+"set list
+"set listchars=tab:\ \ ,extends:>,precedes:<
+" disabling list because it interferes with soft wrap
+
+set formatoptions-=o "dont continue comments when pushing o/O
+
+"vertical/horizontal scroll off settings
+set scrolloff=3
+set sidescrolloff=7
+set sidescroll=1
+
+"load ftplugins and indent files
+filetype plugin on
+filetype indent on
+
+"turn on syntax highlighting
+syntax on
+
+"some stuff to get the mouse going in term
+set mouse=a
+set ttymouse=xterm2
+
+"hide buffers when not displayed
+set hidden
+
+"Command-T configuration
+let g:CommandTMaxHeight=10
 let g:CommandTMatchWindowAtTop=1
 
-syntax on
-set wildignore+=*.bak,*.pyc,*.py~,*.pdf,*.so,*.gif,*.jpg,*.flv,*.class,*.jar,*.png,*/tools/*,*/docs/*,*.swp
-set wildmode=list:longest
-set wildmenu
-set anti
-set textwidth=0
-set tabstop=4
-set softtabstop=4
-set shiftwidth=4
-set encoding=utf-8
-set expandtab
-set backspace=indent,eol,start
-set smarttab
-set smartindent
-set showmode
-set fileformats=unix,dos
-set showmatch       " Show matching brackets.
-set autowrite       " Automatically save before commands like :next and :make
-set ignorecase      " Do case insensitive matching
-set incsearch       " Incremental search
-set wmh=0           " set winminheight to 0
-set ruler
-set linebreak
-set guioptions-=T   " Turn toolbar off
-set guioptions-=m   " Turn menubar off
-set guioptions-=r   " remove right-hand scroll bar
-set virtualedit=all
-set smartcase       " Do smart case matching
-set mousemodel=popup
-set foldmethod=indent 
-set foldlevel=999
-set guitablabel=%N\ %t\ %M
-compiler ruby
+if has("gui_running")
+    "tell the term has 256 colors
+    set t_Co=256
 
-" *****************
-" Mapping section *                    
-" *****************
+    colorscheme railscasts
+    set guitablabel=%M%t
+    set lines=40
+    set columns=115
 
-map <C-J> <C-W>j<C-W>_
-map <C-K> <C-W>k<C-W>_
-map <silent><C-Left> <C-T>
-map <silent><C-Right> <C-]>
-vmap <C-y> "+y
-vmap <silent><C-s> :sort<CR>
+    if has("gui_gnome")
+        set term=gnome-256color
+        colorscheme railscasts
+        set guifont=Monospace\ Bold\ 12
+    endif
+
+    if has("gui_mac") || has("gui_macvim")
+        set guifont=Menlo:h14
+        " key binding for Command-T to behave properly
+        " uncomment to replace the Mac Command-T key to Command-T plugin
+        "macmenu &File.New\ Tab key=<nop>
+        "map <D-t> :CommandT<CR>
+        " make Mac's Option key behave as the Meta key
+    endif
+
+    if has("gui_win32") || has("gui_win32s")
+        set guifont=Consolas:h12
+        set enc=utf-8
+    endif
+else
+    "dont load csapprox if there is no gui support - silences an annoying warning
+    let g:CSApprox_loaded = 1
+
+    "set railscasts colorscheme when running vim in gnome terminal
+    if $COLORTERM == 'gnome-terminal'
+        set term=gnome-256color
+        colorscheme railscasts
+    else
+        colorscheme default
+    endif
+endif
+
+let mapleader = ";"
+let g:mapleader = ";"
+
+" PeepOpen uses <Leader>p as well so you will need to redefine it so something
+" else in your ~/.vimrc file, such as:
+" nmap <silent> <Leader>q <Plug>PeepOpen
+
+silent! nmap <silent> <Leader>p :NERDTreeToggle<CR>
+nnoremap <silent> <C-f> :call FindInNERDTree()<CR>
+
+"make <c-l> clear the highlight as well as redraw
+nnoremap <C-L> :nohls<CR><C-L>
+inoremap <C-L> <C-O>:nohls<CR>
+
+"map to bufexplorer
+nnoremap <leader>b :BufExplorer<cr>
+
+" Command-T
+" find file
+map <leader>f :CommandTFlush<cr>\|:CommandT<cr>
+
+" find file in current directory
+map <leader>gf :CommandTFlush<cr>\|:CommandT %%<cr>
+map <leader>gv :CommandTFlush<cr>\|:CommandT app/views<cr>
+map <leader>gc :CommandTFlush<cr>\|:CommandT app/controllers<cr>
+map <leader>gm :CommandTFlush<cr>\|:CommandT app/models<cr>
+map <leader>gh :CommandTFlush<cr>\|:CommandT app/helpers<cr>
+map <leader>gl :CommandTFlush<cr>\|:CommandT lib<cr>
+map <leader>gp :CommandTFlush<cr>\|:CommandT public<cr>
+map <leader>gs :CommandTFlush<cr>\|:CommandT public/stylesheets<cr>
+map <leader>ga :CommandTFlush<cr>\|:CommandT app/assets<cr>
+
+" View routes or Gemfile in large split
+map <leader>gr :topleft :split config/routes.rb<cr>
+map <leader>gg :topleft 100 :split Gemfile<cr>
+
+" Skip to Model, View or Controller
+map <Leader>m :Rmodel
+map <Leader>v :Rview
+map <Leader>c :Rcontroller
+
+" Other files to consider Ruby
+au BufRead,BufNewFile Gemfile,Rakefile,Thorfile,config.ru,Vagrantfile,Guardfile,Capfile set ft=ruby
+
+"  ---------------------------------------------------------------------------
+"  Directories
+"  ---------------------------------------------------------------------------
+
+set backupdir=~/tmp,/tmp
+set undodir=~/.vim/.tmp,~/tmp,~/.tmp,/tmp
+
+"control+s salva
 nmap <C-s> :w<CR>
 imap <silent><C-s> <ESC>:w<CR>a
-imap <silent><C-Del> <ESC>dea
-inoremap <C-k> <ESC>
-"inoremap <CR> <ESC>
-nnoremap j gj
-nnoremap k gk
-nnoremap <space> za
-map <leader>a <ESC>ggvG$
-nnoremap <silent><leader>f :CommandT<CR>
 
-" Maps for tab specific funcionalities
-nnoremap L :tabnext<CR>
-nnoremap H :tabprevious<CR>
-map <M-t> :tabnew<CR>
-nmap <silent><leader>n :tabnew<CR>
+"map Q to something useful
+noremap Q gq
 
-" Remap code completion to Ctrl-Space
-inoremap <C-Space> <C-x><C-u>
-inoremap <C-j> <C-n>
+"make Y consistent with C and D
+nnoremap Y y$
 
-" Rails specific mappings
-inoremap <M-=> <%=  %><ESC>hhi
-inoremap <M--> <%  -%><ESC>hhhi
-nnoremap gr  :R<CR>
-nnoremap grt :RT<CR>
-nnoremap ga  :A<CR>
-nnoremap gat :AT<CR>
+"bindings for ragtag
+inoremap <M-o>       <Esc>o
+inoremap <C-j>       <Down>
+let g:ragtag_global_maps = 1
 
-" Automatically surround brackets, quotes, double quotes, etc..
-inoremap '<space> ''<ESC>i
-inoremap "<space> ""<ESC>i
-inoremap ( ()<ESC>i
-inoremap [ []<ESC>i
-inoremap { {}<ESC>i
+"mark syntax errors with :signs
+let g:syntastic_enable_signs=1
 
-nnoremap <silent><leader>q :NERDTreeToggle<CR>
-nnoremap <silent><leader>s :set spell spelllang=pt<CR>
-exec "nmap <leader>r :source ~/".cfgfile." <CR>:echo 'Refresh!' <CR>"
+"key mapping for vimgrep result navigation
+map <A-o> :copen<CR>
+map <A-q> :cclose<CR>
+map <A-j> :cnext<CR>
+map <A-k> :cprevious<CR>
 
-nnoremap - :q<CR>
-nnoremap <C-_> :q!<CR>
 
-map <silent><leader>c <plug>NERDCommenterToggle
-map <silent><leader>x <plug>NERDCommenterSexy
-map <silent><leader>z <plug>NERDCommenterMinimal
+
+"  ---------------------------------------------------------------------------
+"  Function Keys
+"  ---------------------------------------------------------------------------
+
+" F2 - Terminal
+map <F2> :ConqueTerm zsh<CR>
+
+" F3 - YankRing
+nnoremap <silent> <F3> :YRShow<cr>
+inoremap <silent> <F3> <ESC>:YRShow<cr>
+
+"key mapping for Gundo
+nnoremap <F4> :GundoToggle<CR>
+
+" Press F5 to toggle GUndo tree
+nnoremap <F5> :GundoToggle<CR>
+
+" indent file and return cursor and center cursor
+map   <silent> <F6> mmgg=G`m^zz
+imap  <silent> <F6> <Esc> mmgg=G`m^zz
+
+"snipmate setup
+try
+  source ~/.vim/snippets/support_functions.vim
+catch
+  source ~/vimfiles/snippets/support_functions.vim
+endtry
+autocmd vimenter * call s:SetupSnippets()
+function! s:SetupSnippets()
+
+    "if we're in a rails env then read in the rails snippets
+    if filereadable("./config/environment.rb")
+      try
+        call ExtractSnips("~/.vim/snippets/ruby-rails", "ruby")
+        call ExtractSnips("~/.vim/snippets/eruby-rails", "eruby")
+      catch
+        call ExtractSnips("~/vimfiles/snippets/ruby-rails", "ruby")
+        call ExtractSnips("~/vimfiles/snippets/eruby-rails", "eruby")
+      endtry
+    endif
+
+    try
+      call ExtractSnips("~/.vim/snippets/html", "eruby")
+      call ExtractSnips("~/.vim/snippets/html", "xhtml")
+      call ExtractSnips("~/.vim/snippets/html", "php")
+    catch
+      call ExtractSnips("~/vimfiles/snippets/html", "eruby")
+      call ExtractSnips("~/vimfiles/snippets/html", "xhtml")
+      call ExtractSnips("~/vimfiles/snippets/html", "php")
+    endtry
+endfunction
+
+"visual search mappings
+function! s:VSetSearch()
+    let temp = @@
+    norm! gvy
+    let @/ = '\V' . substitute(escape(@@, '\'), '\n', '\\n', 'g')
+    let @@ = temp
+endfunction
+vnoremap * :<C-u>call <SID>VSetSearch()<CR>//<CR>
+vnoremap # :<C-u>call <SID>VSetSearch()<CR>??<CR>
+
+
+"jump to last cursor position when opening a file
+"dont do it when writing a commit log entry
+autocmd BufReadPost * call SetCursorPosition()
+function! SetCursorPosition()
+    if &filetype !~ 'commit\c'
+        if line("'\"") > 0 && line("'\"") <= line("$")
+            exe "normal! g`\""
+            normal! zz
+        endif
+    end
+endfunction
+
+"define :HighlightLongLines command to highlight the offending parts of
+"lines that are longer than the specified length (defaulting to 80)
+command! -nargs=? HighlightLongLines call s:HighlightLongLines('<args>')
+function! s:HighlightLongLines(width)
+    let targetWidth = a:width != '' ? a:width : 79
+    if targetWidth > 0
+        exec 'match Todo /\%>' . (targetWidth) . 'v/'
+    else
+        echomsg "Usage: HighlightLongLines [natural number]"
+    endif
+endfunction
+
+" Strip trailing whitespace
+function! <SID>StripTrailingWhitespaces()
+    " Preparation: save last search, and cursor position.
+    let _s=@/
+    let l = line(".")
+    let c = col(".")
+    " Do the business:
+    %s/\s\+$//e
+    " Clean up: restore previous search history, and cursor position
+    let @/=_s
+    call cursor(l, c)
+endfunction
+autocmd BufWritePre * :call <SID>StripTrailingWhitespaces()
+
+"key mapping for window navigation
+map <C-h> <C-w>h
+map <C-j> <C-w>j
+map <C-k> <C-w>k
+map <C-l> <C-w>l
+
+"key mapping for tab navigation
+nmap <Tab> gt
+nmap <S-Tab> gT
+
+"Key mapping for textmate-like indentation
+nmap <D-[> <<
+nmap <D-]> >>
+vmap <D-[> <gv
+vmap <D-]> >gv
+
+let ScreenShot = {'Icon':0, 'Credits':0, 'force_background':'#FFFFFF'}
+
+"Enabling Zencoding
+let g:user_zen_settings = {
+  \  'php' : {
+  \    'extends' : 'html',
+  \    'filters' : 'c',
+  \  },
+  \  'xml' : {
+  \    'extends' : 'html',
+  \  },
+  \  'haml' : {
+  \    'extends' : 'html',
+  \  },
+  \  'erb' : {
+  \    'extends' : 'html',
+  \  },
+ \}
